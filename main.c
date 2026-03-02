@@ -3,9 +3,6 @@
 #include <raymath.h>
 #include <stdlib.h>
 
-#define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
-
 #define BULLET_SPEED 500.0f
 #define FIRE_RATE 8.0f
 #define FIRE_COOLDOWN (1.0f / FIRE_RATE)
@@ -85,14 +82,14 @@ void draw_ship(Ship *ship, Texture2D shadow_tex) {
   DrawTexturePro(ship_tex, ship_src, ship_dst, ship_origin, angleDeg, WHITE);
 }
 
-void update_ship(Ship *ship, float dt) {
+void update_ship(Ship *ship, int sw, int sh, float dt) {
   if (IsKeyDown(KEY_A))
-    ship->rotation -= 3.0f * dt;
+    ship->rotation -= 4.0f * dt;
   if (IsKeyDown(KEY_D))
-    ship->rotation += 3.0f * dt;
+    ship->rotation += 4.0f * dt;
 
   if (IsKeyDown(KEY_W)) {
-    float thrust = 350.0f;
+    float thrust = 450.0f;
     ship->vel.x += sinf(ship->rotation) * thrust * dt;
     ship->vel.y += -cosf(ship->rotation) * thrust * dt;
   }
@@ -103,6 +100,14 @@ void update_ship(Ship *ship, float dt) {
 
   ship->pos.x += ship->vel.x * dt;
   ship->pos.y += ship->vel.y * dt;
+
+  float r = ship->size * 0.5f;
+  ship->pos.x = clampf(ship->pos.x, r, sw - r);
+  ship->pos.y = clampf(ship->pos.y, r, sh - r);
+  if (ship->pos.x <= r || ship->pos.x >= sw - r)
+    ship->vel.x = 0;
+  if (ship->pos.y <= r || ship->pos.y >= sh - r)
+    ship->vel.y = 0;
 }
 
 void update_bullets(Bullet *bullets, int max_bullets, float dt) {
@@ -140,7 +145,14 @@ void calculate_ship_pos(Ship *ship) {
 }
 
 int main(void) {
-  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Nieme");
+  int monitor = GetCurrentMonitor();
+  int screenW = GetMonitorWidth(monitor);
+  int screenH = GetMonitorHeight(monitor);
+
+  InitWindow(screenW, screenH, "Nieme");
+  ToggleFullscreen();
+  screenW = GetScreenWidth();
+  screenH = GetScreenHeight();
   SetTargetFPS(60);
   InitAudioDevice();
 
@@ -160,14 +172,13 @@ int main(void) {
   Texture2D ship_shadow_texture = LoadTexture("assets/sprites/ship_shadow.png");
   Texture2D bullet_texture = LoadTexture("assets/sprites/bullet.png");
 
-  Ship player_ship = {
-      .pos = {(float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2},
-      .acc = {0, 0},
-      .vel = {0, 0},
-      .size = 100.0f,
-      .rotation = 0,
-      .tex = ship_texture,
-      .tex_scale = 1.0f};
+  Ship player_ship = {.pos = {(float)screenW / 2, (float)screenH / 2},
+                      .acc = {0, 0},
+                      .vel = {0, 0},
+                      .size = 100.0f,
+                      .rotation = 0,
+                      .tex = ship_texture,
+                      .tex_scale = 1.0f};
 
   player_ship.tex_scale = player_ship.size / (float)player_ship.tex.height;
 
@@ -212,7 +223,7 @@ int main(void) {
       shoot_voice = (shoot_voice + 1) % SHOOT_VOICES;
     }
 
-    update_ship(&player_ship, dt);
+    update_ship(&player_ship, screenW, screenH, dt);
     update_bullets(bullets, max_bullets, dt);
 
     BeginDrawing();
@@ -223,8 +234,8 @@ int main(void) {
 
     Rectangle src = {0, 0, (float)bg_tile.width, (float)bg_tile.height};
 
-    for (int y = 0; y < SCREEN_HEIGHT; y += tile_h) {
-      for (int x = 0; x < SCREEN_WIDTH; x += tile_w) {
+    for (int y = 0; y < screenH; y += tile_h) {
+      for (int x = 0; x < screenW; x += tile_w) {
         Rectangle dst = {(float)x, (float)y, (float)tile_w, (float)tile_h};
         DrawTexturePro(bg_tile, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
       }
