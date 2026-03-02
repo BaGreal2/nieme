@@ -1,15 +1,16 @@
 #include <math.h>
 #include <raylib.h>
+#include <raymath.h>
 #include <stdlib.h>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 600
 
 #define BULLET_SPEED 500.0f
-#define FIRE_RATE 10.0f
+#define FIRE_RATE 8.0f
 #define FIRE_COOLDOWN (1.0f / FIRE_RATE)
 
-#define SHOOT_VOICES 10
+#define SHOOT_VOICES 8
 
 typedef struct {
   Vector2 pos;
@@ -17,127 +18,71 @@ typedef struct {
   Vector2 acc;
   float size;
   float rotation;
-  Color color;
+  Texture2D tex;
+  float tex_scale;
 } Ship;
 
 typedef struct {
   Vector2 pos;
   Vector2 vel;
+
   Vector2 size;
+
   float rotation;
-  Color color;
   bool active;
+
+  Texture2D *tex;
 } Bullet;
 
-void draw_triangle(Vector2 pos, float size, float rotation, Color color) {
-  Vector2 p1 = {0.0f, -size};
-  Vector2 p2 = {-0.87f * size, 0.5f * size};
-  Vector2 p3 = {0.87f * size, 0.5f * size};
-
-  float s = sinf(rotation);
-  float c = cosf(rotation);
-
-  p1 = (Vector2){p1.x * c - p1.y * s, p1.x * s + p1.y * c};
-  p2 = (Vector2){p2.x * c - p2.y * s, p2.x * s + p2.y * c};
-  p3 = (Vector2){p3.x * c - p3.y * s, p3.x * s + p3.y * c};
-
-  p1.x += pos.x;
-  p1.y += pos.y;
-  p2.x += pos.x;
-  p2.y += pos.y;
-  p3.x += pos.x;
-  p3.y += pos.y;
-
-  DrawTriangle(p1, p2, p3, color);
+static float clampf(float v, float a, float b) {
+  return (v < a) ? a : (v > b) ? b : v;
 }
 
-void draw_ship(Ship *ship) {
-  Vector2 p1 = {0.87f * ship->size, -0.5f * ship->size};
-  Vector2 p2 = {-0.87f * ship->size, -0.5f * ship->size};
-  Vector2 p3 = {0.0f, ship->size};
+void draw_ship(Ship *ship, Texture2D shadow_tex) {
+  Texture2D ship_tex = ship->tex;
 
-  float s = sinf(ship->rotation);
-  float c = cosf(ship->rotation);
+  float w = ship_tex.width * ship->tex_scale;
+  float h = ship_tex.height * ship->tex_scale;
 
-  p1 = (Vector2){p1.x * c - p1.y * s, p1.x * s + p1.y * c};
-  p2 = (Vector2){p2.x * c - p2.y * s, p2.x * s + p2.y * c};
-  p3 = (Vector2){p3.x * c - p3.y * s, p3.x * s + p3.y * c};
+  Rectangle ship_src = {0, 0, (float)ship_tex.width, (float)ship_tex.height};
+  Rectangle ship_dst = {ship->pos.x, ship->pos.y, w, h};
+  Vector2 ship_origin = {w * 0.5f, h * 0.5f};
 
-  p1.x += ship->pos.x;
-  p1.y += ship->pos.y;
-  p2.x += ship->pos.x;
-  p2.y += ship->pos.y;
-  p3.x += ship->pos.x;
-  p3.y += ship->pos.y;
+  float angleDeg = ship->rotation * RAD2DEG;
 
-  Vector2 mid = (Vector2){(p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f};
+  Vector2 light_pos = (Vector2){120.0f, 80.0f};
 
-  Vector2 d = (Vector2){mid.x - p3.x, mid.y - p3.y};
+  Vector2 d = Vector2Subtract(ship->pos, light_pos);
   float len = sqrtf(d.x * d.x + d.y * d.y);
-
-  Vector2 dir = (len > 0.00001f) ? (Vector2){d.x / len, d.y / len}
-                                 : (Vector2){0.0f, -1.0f};
-
-  float front_offset = 2.4f * ship->size;
-
-  Vector2 p_front =
-      (Vector2){mid.x + dir.x * front_offset, mid.y + dir.y * front_offset};
-
-  float forward_offset = 1.2f * ship->size;
-  float bias = 0.3f * ship->size;
-
-  // p_left
-  Vector2 mid23 = (Vector2){(p2.x + p3.x) * 0.5f, (p2.y + p3.y) * 0.5f};
-
-  Vector2 v_left = (Vector2){mid23.x - p1.x, mid23.y - p1.y};
-  float v_left_len = sqrtf(v_left.x * v_left.x + v_left.y * v_left.y);
-
-  Vector2 dir13 = (v_left_len > 0.00001f)
-                      ? (Vector2){v_left.x / v_left_len, v_left.y / v_left_len}
-                      : (Vector2){1.0f, 0.0f};
-
-  Vector2 base_left = (Vector2){mid23.x + dir13.x * forward_offset,
-                                mid23.y + dir13.y * forward_offset};
-  Vector2 perp_left = (Vector2){-dir13.y, dir13.x};
-
-  Vector2 toP2 = (Vector2){p2.x - base_left.x, p2.y - base_left.y};
-  float dot_left = toP2.x * perp_left.x + toP2.y * perp_left.y;
-  if (dot_left > 0.0f) {
-    perp_left.x = -perp_left.x;
-    perp_left.y = -perp_left.y;
+  if (len > 0.0001f) {
+    d.x /= len;
+    d.y /= len;
+  } else {
+    d = (Vector2){1.0f, 1.0f};
   }
 
-  Vector2 p_left = (Vector2){base_left.x + perp_left.x * bias,
-                             base_left.y + perp_left.y * bias};
+  float dist01 = clampf(len / 900.0f, 0.0f, 1.0f);
 
-  // p_right
-  Vector2 mid13 = (Vector2){(p1.x + p3.x) * 0.5f, (p1.y + p3.y) * 0.5f};
+  float offset_px = 5.0f + 6.0f * dist01;
+  Vector2 shadow_offset = (Vector2){d.x * offset_px, d.y * offset_px};
 
-  Vector2 v_right = (Vector2){mid13.x - p2.x, mid13.y - p2.y};
-  float v_right_len = sqrtf(v_left.x * v_left.x + v_left.y * v_left.y);
+  float shadow_scale = 1.00f;
 
-  Vector2 dir23 = (v_right_len > 0.00001f) ? (Vector2){v_right.x / v_right_len,
-                                                       v_right.y / v_right_len}
-                                           : (Vector2){1.0f, 0.0f};
+  float sw = w * shadow_scale;
+  float sh = h * shadow_scale;
 
-  Vector2 base_right = (Vector2){mid13.x + dir23.x * forward_offset,
-                                 mid13.y + dir23.y * forward_offset};
-  Vector2 perp_right = (Vector2){-dir23.y, dir23.x};
+  Rectangle sh_src = {0, 0, (float)shadow_tex.width, (float)shadow_tex.height};
+  Rectangle sh_dst_base = {ship->pos.x + shadow_offset.x,
+                           ship->pos.y + shadow_offset.y, sw, sh};
+  Vector2 sh_origin = {sw * 0.5f, sh * 0.5f};
 
-  Vector2 toP1 = (Vector2){p1.x - base_right.x, p1.y - base_right.y};
-  float dot_right = toP1.x * perp_right.x + toP1.y * perp_right.y;
-  if (dot_right > 0.0f) {
-    perp_right.x = -perp_right.x;
-    perp_right.y = -perp_right.y;
-  }
+  const Vector2 taps[] = {
+      {0, 0}, {1, 0},  {-1, 0}, {0, 1},   {0, -1},
+      {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+  };
 
-  Vector2 p_right = (Vector2){base_right.x + perp_right.x * bias,
-                              base_right.y + perp_right.y * bias};
-
-  DrawTriangle(p_front, p2, p1, ship->color);
-  DrawTriangle(p2, p_left, p3, ship->color);
-  DrawTriangle(p1, p3, p_right, ship->color);
-  DrawCircle(ship->pos.x, ship->pos.y, ship->size * 0.5, BLACK);
+  DrawTexturePro(shadow_tex, sh_src, sh_dst_base, sh_origin, angleDeg, WHITE);
+  DrawTexturePro(ship_tex, ship_src, ship_dst, ship_origin, angleDeg, WHITE);
 }
 
 void update_ship(Ship *ship, float dt) {
@@ -172,11 +117,18 @@ void update_bullets(Bullet *bullets, int max_bullets, float dt) {
 }
 
 void draw_bullet(Bullet *b) {
-  Rectangle rect = {b->pos.x, b->pos.y, b->size.x, b->size.y};
+  if (!b->tex)
+    return;
+
+  Texture2D tex = *b->tex;
+
+  Rectangle src = {0, 0, (float)tex.width, (float)tex.height};
+
+  Rectangle dst = {b->pos.x, b->pos.y, b->size.x, b->size.y};
 
   Vector2 origin = {b->size.x * 0.5f, b->size.y * 0.5f};
 
-  DrawRectanglePro(rect, origin, b->rotation * RAD2DEG, WHITE);
+  DrawTexturePro(tex, src, dst, origin, b->rotation * RAD2DEG, WHITE);
 }
 
 void calculate_ship_pos(Ship *ship) {
@@ -188,11 +140,11 @@ void calculate_ship_pos(Ship *ship) {
 }
 
 int main(void) {
-  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "NieMe");
+  InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Nieme");
   SetTargetFPS(60);
   InitAudioDevice();
 
-  Sound shoot_base = LoadSound("assets/shoot.mp3");
+  Sound shoot_base = LoadSound("assets/sfx/shoot.mp3");
   SetSoundVolume(shoot_base, 0.5f);
 
   Sound shoot_voices[SHOOT_VOICES] = {0};
@@ -203,19 +155,29 @@ int main(void) {
 
   int shoot_voice = 0;
 
+  Texture2D bg_tile = LoadTexture("assets/sprites/bg_tile.png");
+  Texture2D ship_texture = LoadTexture("assets/sprites/ship.png");
+  Texture2D ship_shadow_texture = LoadTexture("assets/sprites/ship_shadow.png");
+  Texture2D bullet_texture = LoadTexture("assets/sprites/bullet.png");
+
   Ship player_ship = {
       .pos = {(float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2},
       .acc = {0, 0},
       .vel = {0, 0},
-      .size = 10.0,
+      .size = 100.0f,
       .rotation = 0,
-      .color = {0xDB, 0xD4, 0xCD, 0xFF}};
+      .tex = ship_texture,
+      .tex_scale = 1.0f};
+
+  player_ship.tex_scale = player_ship.size / (float)player_ship.tex.height;
 
   int max_bullets = 100;
   Bullet *bullets = malloc(sizeof(Bullet) * max_bullets);
   int next_bullet = 0;
-  for (int i = 0; i < max_bullets; i++)
+  for (int i = 0; i < max_bullets; i++) {
     bullets[i].active = false;
+    bullets[i].tex = &bullet_texture;
+  }
 
   float shoot_cooldown = 0.0f;
 
@@ -231,17 +193,16 @@ int main(void) {
       float c = cosf(player_ship.rotation);
       Vector2 forward = (Vector2){s, -c};
 
-      float muzzle_offset = player_ship.size * 2.0f;
+      float muzzle_offset = player_ship.size * 0.5f;
       b->pos = (Vector2){player_ship.pos.x + forward.x * muzzle_offset,
                          player_ship.pos.y + forward.y * muzzle_offset};
 
       b->vel = (Vector2){player_ship.vel.x + forward.x * BULLET_SPEED,
                          player_ship.vel.y + forward.y * BULLET_SPEED};
 
-      b->size = (Vector2){5.0f, 15.0f};
+      b->size = (Vector2){40.0f, 80.0f};
       b->rotation = player_ship.rotation;
       b->active = true;
-      b->color = WHITE;
 
       next_bullet = (next_bullet + 1) % max_bullets;
 
@@ -255,15 +216,32 @@ int main(void) {
     update_bullets(bullets, max_bullets, dt);
 
     BeginDrawing();
-    ClearBackground((Color){0xC6, 0xC0, 0xA8, 0xFF});
+    float bg_scale = 0.25f;
+
+    int tile_w = (int)(bg_tile.width * bg_scale);
+    int tile_h = (int)(bg_tile.height * bg_scale);
+
+    Rectangle src = {0, 0, (float)bg_tile.width, (float)bg_tile.height};
+
+    for (int y = 0; y < SCREEN_HEIGHT; y += tile_h) {
+      for (int x = 0; x < SCREEN_WIDTH; x += tile_w) {
+        Rectangle dst = {(float)x, (float)y, (float)tile_w, (float)tile_h};
+        DrawTexturePro(bg_tile, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
+      }
+    }
+
     for (int i = 0; i < max_bullets; i++) {
       if (bullets[i].active)
         draw_bullet(&bullets[i]);
     }
-    draw_ship(&player_ship);
+    draw_ship(&player_ship, ship_shadow_texture);
     EndDrawing();
   }
 
+  UnloadTexture(bullet_texture);
+  UnloadTexture(ship_texture);
+  UnloadTexture(ship_shadow_texture);
+  UnloadTexture(bg_tile);
   for (int i = 0; i < SHOOT_VOICES; i++)
     UnloadSoundAlias(shoot_voices[i]);
   UnloadSound(shoot_base);
