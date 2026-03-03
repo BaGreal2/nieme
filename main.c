@@ -151,8 +151,9 @@ int main(void) {
 
   InitWindow(screenW, screenH, "Nieme");
   ToggleFullscreen();
-  screenW = GetScreenWidth();
-  screenH = GetScreenHeight();
+  screenW = GetMonitorWidth(monitor);
+  screenH = GetMonitorHeight(monitor);
+
   SetTargetFPS(60);
   InitAudioDevice();
 
@@ -193,6 +194,8 @@ int main(void) {
   float shoot_cooldown = 0.0f;
 
   while (!WindowShouldClose()) {
+    int sw = GetScreenWidth();
+    int sh = GetScreenHeight();
     float dt = GetFrameTime();
     if (shoot_cooldown > 0.0f)
       shoot_cooldown -= dt;
@@ -223,7 +226,7 @@ int main(void) {
       shoot_voice = (shoot_voice + 1) % SHOOT_VOICES;
     }
 
-    update_ship(&player_ship, screenW, screenH, dt);
+    update_ship(&player_ship, sw, sh, dt);
     update_bullets(bullets, max_bullets, dt);
 
     BeginDrawing();
@@ -234,8 +237,8 @@ int main(void) {
 
     Rectangle src = {0, 0, (float)bg_tile.width, (float)bg_tile.height};
 
-    for (int y = 0; y < screenH; y += tile_h) {
-      for (int x = 0; x < screenW; x += tile_w) {
+    for (int y = 0; y < sh; y += tile_h) {
+      for (int x = 0; x < sw; x += tile_w) {
         Rectangle dst = {(float)x, (float)y, (float)tile_w, (float)tile_h};
         DrawTexturePro(bg_tile, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
       }
