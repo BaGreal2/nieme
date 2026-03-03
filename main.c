@@ -3,11 +3,11 @@
 #include <raymath.h>
 #include <stdlib.h>
 
-#define BULLET_SPEED 500.0f
-#define FIRE_RATE 8.0f
+#define BULLET_SPEED 1000.0f
+#define FIRE_RATE 10.0f
 #define FIRE_COOLDOWN (1.0f / FIRE_RATE)
 
-#define SHOOT_VOICES 8
+#define SHOOT_VOICES 10
 
 typedef struct {
   Vector2 pos;
@@ -88,10 +88,14 @@ void update_ship(Ship *ship, int sw, int sh, float dt) {
   if (IsKeyDown(KEY_D))
     ship->rotation += 4.0f * dt;
 
+  float thrust = 450.0f;
   if (IsKeyDown(KEY_W)) {
-    float thrust = 450.0f;
     ship->vel.x += sinf(ship->rotation) * thrust * dt;
     ship->vel.y += -cosf(ship->rotation) * thrust * dt;
+  }
+  if (IsKeyDown(KEY_S)) {
+    ship->vel.x -= sinf(ship->rotation) * thrust * dt;
+    ship->vel.y -= -cosf(ship->rotation) * thrust * dt;
   }
 
   float damping = 0.99f;
@@ -149,12 +153,13 @@ int main(void) {
   int screenW = GetMonitorWidth(monitor);
   int screenH = GetMonitorHeight(monitor);
 
+  SetConfigFlags(FLAG_MSAA_4X_HINT);
   InitWindow(screenW, screenH, "Nieme");
   ToggleFullscreen();
+  SetTargetFPS(60);
   screenW = GetMonitorWidth(monitor);
   screenH = GetMonitorHeight(monitor);
-
-  SetTargetFPS(60);
+  SetTargetFPS(120);
   InitAudioDevice();
 
   Sound shoot_base = LoadSound("assets/sfx/shoot.mp3");
@@ -172,6 +177,11 @@ int main(void) {
   Texture2D ship_texture = LoadTexture("assets/sprites/ship.png");
   Texture2D ship_shadow_texture = LoadTexture("assets/sprites/ship_shadow.png");
   Texture2D bullet_texture = LoadTexture("assets/sprites/bullet.png");
+
+  SetTextureFilter(bg_tile, TEXTURE_FILTER_TRILINEAR);
+  SetTextureFilter(ship_texture, TEXTURE_FILTER_TRILINEAR);
+  SetTextureFilter(ship_shadow_texture, TEXTURE_FILTER_TRILINEAR);
+  SetTextureFilter(bullet_texture, TEXTURE_FILTER_TRILINEAR);
 
   Ship player_ship = {.pos = {(float)screenW / 2, (float)screenH / 2},
                       .acc = {0, 0},
@@ -194,8 +204,8 @@ int main(void) {
   float shoot_cooldown = 0.0f;
 
   while (!WindowShouldClose()) {
-    int sw = GetScreenWidth();
-    int sh = GetScreenHeight();
+    int sw = GetRenderWidth();
+    int sh = GetRenderHeight();
     float dt = GetFrameTime();
     if (shoot_cooldown > 0.0f)
       shoot_cooldown -= dt;
