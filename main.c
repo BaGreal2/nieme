@@ -22,17 +22,90 @@ typedef struct {
 typedef struct {
   Vector2 pos;
   Vector2 vel;
-
   Vector2 size;
-
   float rotation;
   bool active;
-
   Texture2D *tex;
 } Bullet;
 
+typedef struct {
+  Vector2 pos;
+  float radius;
+  int num_points;
+  float points[100];
+  float cooldowns[100];
+  float rotation_speed;
+  float current_rotation;
+} Emitter;
+
+typedef struct {
+  Vector2 pos;
+  Vector2 vel;
+  float radius;
+  bool active;
+} Emitter_Bullet;
+
 static float clampf(float v, float a, float b) {
   return (v < a) ? a : (v > b) ? b : v;
+}
+
+void draw_emitter_bullets(Emitter *emitter, Emitter_Bullet *emitter_bullets,
+                          int max_bullets) {
+  for (int i = 0; i < max_bullets; i++) {
+    if (emitter_bullets[i].active) {
+      DrawCircleV(emitter_bullets[i].pos, emitter_bullets[i].radius,
+                  (Color){0xFF, 0xA5, 0x10, 0xFF});
+    }
+  }
+
+  DrawCircleV(emitter->pos, emitter->radius, (Color){0x18, 0x18, 0x18, 0xFF});
+}
+
+void update_emitter_bullets(Emitter *emitter, Emitter_Bullet *emitter_bullets,
+                            int sw, int sh, int max_bullets, float dt) {
+  emitter->current_rotation += emitter->rotation_speed * dt;
+  float current_rot_rad = emitter->current_rotation * DEG2RAD;
+
+  float angle_step = (2.0f * PI) / emitter->num_points;
+
+  for (int i = 0; i < emitter->num_points; i++) {
+    emitter->cooldowns[i] -= dt;
+
+    if (emitter->cooldowns[i] <= 0.0f) {
+      float point_angle = current_rot_rad + (i * angle_step);
+      Vector2 dir = {cosf(point_angle), sinf(point_angle)};
+
+      Vector2 spawn_pos = {emitter->pos.x + dir.x * emitter->radius,
+                           emitter->pos.y + dir.y * emitter->radius};
+
+      for (int j = 0; j < max_bullets; j++) {
+        if (!emitter_bullets[j].active) {
+          emitter_bullets[j].active = true;
+          emitter_bullets[j].pos = spawn_pos;
+
+          emitter_bullets[j].vel = (Vector2){dir.x * 200.0f, dir.y * 200.0f};
+          emitter_bullets[j].radius = 16.0f;
+
+          emitter->cooldowns[i] = 1.0f / emitter->points[i];
+          break;
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < max_bullets; i++) {
+    if (emitter_bullets[i].active) {
+      emitter_bullets[i].pos.x += emitter_bullets[i].vel.x * dt;
+      emitter_bullets[i].pos.y += emitter_bullets[i].vel.y * dt;
+
+      if (emitter_bullets[i].pos.x < -100 ||
+          emitter_bullets[i].pos.x > sw + 100 ||
+          emitter_bullets[i].pos.y < -100 ||
+          emitter_bullets[i].pos.y > sh + 100) {
+        emitter_bullets[i].active = false;
+      }
+    }
+  }
 }
 
 void draw_ship(Ship *ship, Texture2D shadow_tex) {
@@ -203,6 +276,21 @@ int main(void) {
 
   float shoot_cooldown = 0.0f;
 
+  Emitter emitter = {.pos = {(float)screenW / 4, (float)screenH / 4},
+                     .radius = 60.0f,
+                     .num_points = 4,
+                     .points = {5.0f, 5.0f, 5.0f, 5.0f},
+                     .cooldowns = {0},
+                     .rotation_speed = 30.0f,
+                     .current_rotation = 0.0f};
+  int max_emitter_bullets = 200;
+  Emitter_Bullet *emitter_bullets =
+      malloc(sizeof(Emitter_Bullet) * max_emitter_bullets);
+  int next_emitter_bullet = 0;
+  for (int i = 0; i < max_bullets; i++) {
+    emitter_bullets[i].active = false;
+  }
+
   while (!WindowShouldClose()) {
     int sw = GetRenderWidth();
     int sh = GetRenderHeight();
@@ -238,6 +326,8 @@ int main(void) {
 
     update_ship(&player_ship, sw, sh, dt);
     update_bullets(bullets, max_bullets, dt);
+    update_emitter_bullets(&emitter, emitter_bullets, sw, sh,
+                           max_emitter_bullets, dt);
 
     BeginDrawing();
     float bg_scale = 0.25f;
@@ -259,6 +349,7 @@ int main(void) {
         draw_bullet(&bullets[i]);
     }
     draw_ship(&player_ship, ship_shadow_texture);
+    draw_emitter_bullets(&emitter, emitter_bullets, max_emitter_bullets);
     EndDrawing();
   }
 
