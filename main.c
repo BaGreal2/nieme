@@ -84,7 +84,7 @@ void update_emitter_bullets(Emitter *emitter, Emitter_Bullet *emitter_bullets,
           emitter_bullets[j].pos = spawn_pos;
 
           emitter_bullets[j].vel = (Vector2){dir.x * 200.0f, dir.y * 200.0f};
-          emitter_bullets[j].radius = 16.0f;
+          emitter_bullets[j].radius = 24.0f;
 
           emitter->cooldowns[i] = 1.0f / emitter->points[i];
           break;
@@ -279,7 +279,7 @@ int main(void) {
   Emitter emitter = {.pos = {(float)screenW / 4, (float)screenH / 4},
                      .radius = 60.0f,
                      .num_points = 4,
-                     .points = {5.0f, 5.0f, 5.0f, 5.0f},
+                     .points = {2.0f, 2.0f, 2.0f, 2.0f},
                      .cooldowns = {0},
                      .rotation_speed = 30.0f,
                      .current_rotation = 0.0f};
