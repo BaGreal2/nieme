@@ -120,7 +120,7 @@ void draw_ship(Ship *ship, Texture2D shadow_tex) {
 
   float angleDeg = ship->rotation * RAD2DEG;
 
-  Vector2 light_pos = (Vector2){120.0f, 80.0f};
+  Vector2 light_pos = (Vector2){0.0f, 0.0f};
 
   Vector2 d = Vector2Subtract(ship->pos, light_pos);
   float len = sqrtf(d.x * d.x + d.y * d.y);
